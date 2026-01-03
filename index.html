@@ -104,6 +104,14 @@
             position: relative;
             box-sizing: border-box;
         }
+
+        /* Ensure images inside the resume preserve their aspect ratio */
+        .resume-page img {
+          max-width: 100%;
+          height: auto !important;
+          object-fit: cover;
+          display: block;
+        }
         
         /* Hide scrollbar inside resume */
         .resume-page::-webkit-scrollbar { width: 0; background: transparent; }

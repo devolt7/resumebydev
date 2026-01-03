@@ -809,21 +809,60 @@ const Preview: React.FC<Props> = ({ data, onBack, onUpdate, theme }) => {
     setExporting(true);
     
     try {
-      // @ts-ignore
-      const canvas = await html2canvas(resumeRef.current, {
-        scale: 2, // Quality scale for export
-        useCORS: true,
-        backgroundColor: data.backgroundColor || '#ffffff', 
-        logging: false,
-        // Vital: Reset transform during capture so we get full resolution, not the scaled-down mobile view
-        onclone: (clonedDoc) => {
-            const element = clonedDoc.getElementById('resume-preview-element');
-            if (element) {
-                element.style.transform = 'none';
-                element.style.margin = '0'; 
-            }
-        }
-      });
+            // Capture the full resume content at high resolution.
+            // To ensure the PDF always matches A4 and contains the entire resume (not cropped),
+            // temporarily make the element auto-height and visible for the clone used by html2canvas.
+            // Then compute scaling to fit the captured image into a single A4 page while preserving aspect ratio.
+            const cloneOptions: any = {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: data.backgroundColor || '#ffffff',
+                logging: false,
+                onclone: (clonedDoc: Document) => {
+                    const element = clonedDoc.getElementById('resume-preview-element') as HTMLElement | null;
+                    try {
+                        if (element && resumeRef.current) {
+                            // Remove transforms applied for preview so html2canvas captures the true layout
+                            element.style.transform = 'none';
+                            element.style.margin = '0';
+                            element.style.height = 'auto';
+                            element.style.maxHeight = 'none';
+                            element.style.overflow = 'visible';
+
+                            // Force the cloned element to use the same pixel width as the original
+                            const originalRect = resumeRef.current.getBoundingClientRect();
+                            if (originalRect && originalRect.width) {
+                                element.style.width = `${Math.round(originalRect.width)}px`;
+                            }
+
+                            // Ensure all images preserve aspect ratio on the cloned document
+                            const imgs = Array.from(element.querySelectorAll('img')) as HTMLImageElement[];
+                            imgs.forEach((img) => {
+                                // Remove explicit width/height attributes that can force distortion
+                                try { img.removeAttribute('width'); } catch (e) {}
+                                try { img.removeAttribute('height'); } catch (e) {}
+
+                                // Make image scale responsively but keep natural aspect ratio
+                                img.style.maxWidth = '100%';
+                                img.style.height = 'auto';
+                                img.style.objectFit = 'cover';
+                                img.style.display = 'block';
+                            });
+
+                            // Also ensure background images or SVGs do not get stretched
+                            const svgs = Array.from(element.querySelectorAll('svg')) as SVGElement[];
+                            svgs.forEach((s) => { s.setAttribute('preserveAspectRatio', 'xMidYMid meet'); });
+                        }
+                    } catch (err) {
+                        // Best-effort; don't fail the export if clone tweaks error
+                        // eslint-disable-next-line no-console
+                        console.warn('onclone image adjustment failed', err);
+                    }
+                }
+            };
+
+            // @ts-ignore
+            const canvas = await html2canvas(resumeRef.current, cloneOptions);
 
       if (format === 'jpeg') {
         const link = document.createElement('a');
@@ -834,8 +873,33 @@ const Preview: React.FC<Props> = ({ data, onBack, onUpdate, theme }) => {
         // @ts-ignore
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
+
+        // PDF page size in mm
+        const PAGE_WIDTH = 210;
+        const PAGE_HEIGHT = 297;
+
+        // Canvas size in pixels
+        const imgWidthPx = canvas.width;
+        const imgHeightPx = canvas.height;
+
+        // Calculate px per mm based on desired PDF width
+        const pxPerMm = imgWidthPx / PAGE_WIDTH;
+
+        // Image height in mm at PDF width
+        const imgHeightMm = imgHeightPx / pxPerMm;
+
+        // If image is taller than page, scale down to fit into page height while preserving aspect ratio
+        const scale = imgHeightMm > PAGE_HEIGHT ? (PAGE_HEIGHT / imgHeightMm) : 1;
+
+        const renderWidth = PAGE_WIDTH * scale;
+        const renderHeight = imgHeightMm * scale;
+
+        // Center vertically and horizontally if there is margin
+        const xOffset = (PAGE_WIDTH - renderWidth) / 2;
+        const yOffset = (PAGE_HEIGHT - renderHeight) / 2;
+
         const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+        pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderWidth, renderHeight);
         pdf.save(`Resume_${data.personalInfo.fullName.replace(/\s+/g, '_')}.pdf`);
       }
     } catch (err) {
