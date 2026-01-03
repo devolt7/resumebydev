@@ -1,0 +1,7 @@
+{
+  "name": "ResumeForgeD",
+  "description": "A premium, AI-powered resume builder designed for ATS optimization and high-impact career branding with a futuristic sci-fi aesthetic.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
