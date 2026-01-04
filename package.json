@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://yourusername.github.io/resumeforged",
+  "homepage": "https://devolt7.github.io/resumebydev",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
