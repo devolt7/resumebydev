@@ -829,11 +829,10 @@ const Preview: React.FC<Props> = ({ data, onBack, onUpdate, theme }) => {
                             element.style.maxHeight = 'none';
                             element.style.overflow = 'visible';
 
-                            // Force the cloned element to use the same pixel width as the original
-                            const originalRect = resumeRef.current.getBoundingClientRect();
-                            if (originalRect && originalRect.width) {
-                                element.style.width = `${Math.round(originalRect.width)}px`;
-                            }
+                            // Force the cloned element to use the full A4 width
+                            const mmToPx = 3.7795275591;
+                            const a4WidthPx = Math.round(210 * mmToPx); // ~794px
+                            element.style.width = `${a4WidthPx}px`;
 
                             // Ensure all images preserve aspect ratio on the cloned document
                             const imgs = Array.from(element.querySelectorAll('img')) as HTMLImageElement[];
@@ -870,37 +869,37 @@ const Preview: React.FC<Props> = ({ data, onBack, onUpdate, theme }) => {
         link.href = canvas.toDataURL('image/jpeg', 0.95);
         link.click();
       } else {
-        // @ts-ignore
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
+                // @ts-ignore
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
 
-        // PDF page size in mm
-        const PAGE_WIDTH = 210;
-        const PAGE_HEIGHT = 297;
+                // PDF page size in mm
+                const PAGE_WIDTH = 210;
+                const PAGE_HEIGHT = 297;
 
-        // Canvas size in pixels
-        const imgWidthPx = canvas.width;
-        const imgHeightPx = canvas.height;
+                // Canvas size in pixels
+                const imgWidthPx = canvas.width;
+                const imgHeightPx = canvas.height;
 
-        // Calculate px per mm based on desired PDF width
-        const pxPerMm = imgWidthPx / PAGE_WIDTH;
+                // Calculate px per mm based on desired PDF width
+                const pxPerMm = imgWidthPx / PAGE_WIDTH;
 
-        // Image height in mm at PDF width
-        const imgHeightMm = imgHeightPx / pxPerMm;
+                // Height of one PDF page in pixels
+                const pageHeightPx = Math.floor(pxPerMm * PAGE_HEIGHT);
 
-        // If image is taller than page, scale down to fit into page height while preserving aspect ratio
-        const scale = imgHeightMm > PAGE_HEIGHT ? (PAGE_HEIGHT / imgHeightMm) : 1;
+                // If content exceeds one page, warn user and prevent export
+                if (imgHeightPx > pageHeightPx) {
+                  alert("Your resume content exceeds one A4 page. Please reduce the content (e.g., shorten descriptions, remove unnecessary items) to fit within a single page for optimal PDF quality.");
+                  setExporting(false);
+                  return;
+                }
 
-        const renderWidth = PAGE_WIDTH * scale;
-        const renderHeight = imgHeightMm * scale;
-
-        // Center vertically and horizontally if there is margin
-        const xOffset = (PAGE_WIDTH - renderWidth) / 2;
-        const yOffset = (PAGE_HEIGHT - renderHeight) / 2;
-
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderWidth, renderHeight);
-        pdf.save(`Resume_${data.personalInfo.fullName.replace(/\s+/g, '_')}.pdf`);
+                const imgData = canvas.toDataURL('image/png');
+                // Center vertically if there's empty space
+                const imgHeightMm = imgHeightPx / pxPerMm;
+                const yOffset = (PAGE_HEIGHT - imgHeightMm) / 2;
+                pdf.addImage(imgData, 'PNG', 0, yOffset, PAGE_WIDTH, imgHeightMm);
+                pdf.save(`Resume_${data.personalInfo.fullName.replace(/\s+/g, '_')}.pdf`);
       }
     } catch (err) {
       console.error("Export failed", err);
